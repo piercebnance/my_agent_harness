@@ -1,4 +1,6 @@
+import calendar
 import json
+import string
 
 def calculator(expression: str) -> str:
     allowed = set("0123456789+-*/(). ")
@@ -6,7 +8,17 @@ def calculator(expression: str) -> str:
         return "Error: invalid characters"
     return str(eval(expression))  # fine for a demo; use a real parser later
 
-TOOLS = { #planned tools: clock, calendar, web search, code generation
+def clock (expression: str = "") -> str:
+    from datetime import datetime
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+def web_search(query: str) -> str:
+    return f"Searching the web for: {query}"
+
+def webpage_scanning(url: str) -> str:
+    return f"Scanning webpage: {url}"
+
+TOOLS = { #planned tools: clock, calendar, web search, webpage scanning, memory (BIG ONE!!), code generation
     "calculator": {
         "fn": calculator,
         "schema": {
@@ -16,6 +28,54 @@ TOOLS = { #planned tools: clock, calendar, web search, code generation
                 "type": "object",
                 "properties": {"expression": {"type": "string"}},
                 "required": ["expression"],
+            },
+        },
+    },
+    "calendar": {
+        "fn": calendar,  # tells the current date and events if any
+        "schema": {
+            "name": "calendar",
+            "description": "Access calendar events.",
+            "input_schema": {
+                "type": "object",
+                "properties": {"date": {"type": "string"}},
+                "required": ["date"],
+            },
+        },
+    },
+    "clock": {
+        "fn": clock,  # tells the current time
+        "schema": {
+            "name": "clock",
+            "description": "Access the current time.",
+            "input_schema": {
+                "type": "object",
+                "properties": {"clock": {"type": "string"}},
+                "required": [],
+            },
+        },
+    },
+    "web_search": {
+        "fn": web_search, #searches the web (currently doesnt work)
+        "schema": {
+            "name": "web_search",
+            "description": "Perform a web search.",
+            "input_schema": {
+                "type": "object",
+                "properties": {"query": {"type": "string"}},
+                "required": ["query"],
+            },
+        },
+    },
+    "webpage_scanning": {
+        "fn": webpage_scanning, #scans a webpage (doesnt work also yet)
+        "schema": {
+            "name": "webpage_scanning",
+            "description": "Scan a webpage for content.",
+            "input_schema": {
+                "type": "object",
+                "properties": {"url": {"type": "string"}},
+                "required": ["url"],
             },
         },
     }
