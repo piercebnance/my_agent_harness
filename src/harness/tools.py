@@ -1,6 +1,12 @@
 import calendar
 import json
 import string
+import ipaddress
+import socket
+from urllib.parse import urlparse
+import requests
+from bs4 import BeautifulSoup
+from ddgs import DDGS
 
 def calculator(expression: str) -> str:
     allowed = set("0123456789+-*/(). ")
