@@ -8,6 +8,9 @@ import requests
 from bs4 import BeautifulSoup
 from ddgs import DDGS
 
+MAX_PAGE_CHARS = 8000
+HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; agent-harness/0.1)"}
+
 def calculator(expression: str) -> str:
     allowed = set("0123456789+-*/(). ")
     if not set(expression) <= allowed:
@@ -18,13 +21,54 @@ def clock (expression: str = "") -> str:
     from datetime import datetime
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-def web_search(query: str) -> str:
-    return f"Searching the web for: {query}"
+def web_search(query: str, max_results: int = 5) -> str:
+    """Return titles, URLs, and snippets for a search query."""
+    results = DDGS().text(query, max_results=max_results)
+    if not results:
+        return "No results found."
+    return "\n\n".join(
+        f"{i}. {r['title']}\n   {r['href']}\n   {r['body']}"
+        for i, r in enumerate(results, 1)
+    )
 
-def webpage_scanning(url: str) -> str:
-    return f"Scanning webpage: {url}"
 
-TOOLS = { #planned tools: clock, calendar, web search, webpage scanning, memory (BIG ONE!!), code generation
+def _is_safe_url(url: str) -> bool:
+    """Block non-http(s) schemes and private/internal addresses."""
+    p = urlparse(url)
+    if p.scheme not in ("http", "https") or not p.hostname:
+        return False
+    try:
+        ip = ipaddress.ip_address(socket.gethostbyname(p.hostname))
+    except socket.gaierror:
+        return False
+    return not (ip.is_private or ip.is_loopback or ip.is_link_local)
+
+
+def read_webpage(url: str, max_chars: int = MAX_PAGE_CHARS) -> str:
+    """Fetch a page and return its cleaned main text, truncated."""
+    if not _is_safe_url(url):
+        return "Error: URL is not allowed."
+
+    resp = requests.get(url, headers=HEADERS, timeout=10)
+    resp.raise_for_status()
+    if "text/html" not in resp.headers.get("Content-Type", ""):
+        return "Error: not an HTML page."
+
+    soup = BeautifulSoup(resp.text, "html.parser")
+    for tag in soup(["script", "style", "nav", "footer", "header", "aside", "form"]):
+        tag.decompose()
+
+    title = soup.title.get_text(strip=True) if soup.title else "(no title)"
+    root = soup.find("main") or soup.find("article") or soup.body or soup
+    text = " ".join(root.get_text(separator=" ").split())
+
+    truncated = len(text) > max_chars
+    text = text[:max_chars]
+    return f"Title: {title}\nURL: {url}\n\n{text}" + (
+        "\n\n[truncated]" if truncated else ""
+    )
+
+TOOLS = { #planned tools: memory (BIG ONE!!), code generation, PDF scanner (for articles found online)
     "calculator": {
         "fn": calculator,
         "schema": {
@@ -50,7 +94,7 @@ TOOLS = { #planned tools: clock, calendar, web search, webpage scanning, memory 
         },
     },
     "clock": {
-        "fn": clock,  # tells the current time
+        "fn": clock,  # tells the current time (dont forget to add timezones)
         "schema": {
             "name": "clock",
             "description": "Access the current time.",
@@ -74,7 +118,7 @@ TOOLS = { #planned tools: clock, calendar, web search, webpage scanning, memory 
         },
     },
     "webpage_scanning": {
-        "fn": webpage_scanning, #scans a webpage (doesnt work also yet)
+        "fn": read_webpage, #scans a webpage (doesnt work also yet)
         "schema": {
             "name": "webpage_scanning",
             "description": "Scan a webpage for content.",
