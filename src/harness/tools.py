@@ -6,7 +6,7 @@ def calculator(expression: str) -> str:
         return "Error: invalid characters"
     return str(eval(expression))  # fine for a demo; use a real parser later
 
-TOOLS = {
+TOOLS = { #planned tools: clock, calendar, web search, code generation
     "calculator": {
         "fn": calculator,
         "schema": {
