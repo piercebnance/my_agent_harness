@@ -7,6 +7,7 @@ from urllib.parse import urlparse
 import requests
 from bs4 import BeautifulSoup
 from ddgs import DDGS
+from .rag import search_knowledge
 
 MAX_PAGE_CHARS = 8000
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; agent-harness/0.1)"}
@@ -68,6 +69,10 @@ def read_webpage(url: str, max_chars: int = MAX_PAGE_CHARS) -> str:
         "\n\n[truncated]" if truncated else ""
     )
 
+def search_knowledge(query: str, k: int = 5) -> str:
+    from harness.rag import search_knowledge as rag_search_knowledge
+    return rag_search_knowledge(query, k=k)
+
 TOOLS = { #planned tools: memory (BIG ONE!!), code generation, PDF scanner (for articles found online)
     "calculator": {
         "fn": calculator,
@@ -128,7 +133,19 @@ TOOLS = { #planned tools: memory (BIG ONE!!), code generation, PDF scanner (for 
                 "required": ["url"],
             },
         },
-    }
+    },
+    "search_knowledge": {
+        "fn": search_knowledge,
+        "schema": {
+            "name": "search_knowledge",
+            "description": "Search the local knowledge base. Use before web search for topics the user has ingested.",
+            "input_schema": {
+                "type": "object",
+                "properties": {"query": {"type": "string"}, "k": {"type": "integer"}},
+                "required": ["query"],
+            },
+        },
+    },
 }
 
 def run_tool(name: str, args: dict) -> str:

@@ -1,3 +1,5 @@
-.venv/ 
+.venv/
+.venv313/ 
 .env 
 __pycache__/
+.rag_store/
