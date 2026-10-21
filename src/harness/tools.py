@@ -7,6 +7,7 @@ from urllib.parse import urlparse
 import requests
 from bs4 import BeautifulSoup
 from ddgs import DDGS
+from . import rag
 from .rag import search_knowledge
 
 MAX_PAGE_CHARS = 8000
@@ -73,7 +74,46 @@ def search_knowledge(query: str, k: int = 5) -> str:
     from harness.rag import search_knowledge as rag_search_knowledge
     return rag_search_knowledge(query, k=k)
 
-TOOLS = { #planned tools: memory (BIG ONE!!), code generation, PDF scanner (for articles found online)
+def _fetch_clean(url: str) -> tuple[str, str]:
+    """Fetch a page and return (title, full cleaned text)."""
+    resp = requests.get(url, headers=HEADERS, timeout=10)
+    resp.raise_for_status()
+    if "text/html" not in resp.headers.get("Content-Type", ""):
+        raise ValueError("not an HTML page")
+
+    soup = BeautifulSoup(resp.text, "html.parser")
+    for tag in soup(["script", "style", "nav", "footer", "header", "aside", "form"]):
+        tag.decompose()
+    title = soup.title.get_text(strip=True) if soup.title else "(no title)"
+    root = soup.find("main") or soup.find("article") or soup.body or soup
+    return title, " ".join(root.get_text(separator=" ").split())
+
+
+def read_webpage(url: str, max_chars: int = MAX_PAGE_CHARS) -> str:
+    """Fetch a page, save it to the knowledge base, return a preview."""
+    if not _is_safe_url(url):
+        return "Error: URL is not allowed."
+
+    title, text = _fetch_clean(url)
+
+    note = ""
+    if len(text) >= 200:                      # skip empty or junk pages
+        try:
+            n = rag.ingest(url, f"{title}\n\n{text}")
+            note = (f"\n\n[Saved {n} chunks to the knowledge base. "
+                    f"Use search_knowledge to query other parts of this page.]")
+        except Exception:
+            pass                              # ingestion must never break reading
+
+    preview = text[:max_chars]
+    if len(text) > max_chars:
+        preview += "\n\n[preview truncated]"
+    return f"Title: {title}\nURL: {url}\n\n{preview}{note}"
+
+def list_sources() -> str:
+    return rag.list_sources_text()
+
+TOOLS = { #planned tools: code generation, PDF scanner (for articles found online and on my machine)
     "calculator": {
         "fn": calculator,
         "schema": {
@@ -138,7 +178,7 @@ TOOLS = { #planned tools: memory (BIG ONE!!), code generation, PDF scanner (for 
         "fn": search_knowledge,
         "schema": {
             "name": "search_knowledge",
-            "description": "Search the local knowledge base. Use before web search for topics the user has ingested.",
+            "description": "Search the local knowledge base of saved documents and previously read web pages. Try this before web_search.",
             "input_schema": {
                 "type": "object",
                 "properties": {"query": {"type": "string"}, "k": {"type": "integer"}},
@@ -146,6 +186,21 @@ TOOLS = { #planned tools: memory (BIG ONE!!), code generation, PDF scanner (for 
             },
         },
     },
+    "list_sources": {
+        "fn": list_sources,
+        "schema": {
+            "name": "list_sources",
+            "description": "List every document and web page saved in the knowledge base, "
+                       "with chunk counts. Use when asked what you know or have access to, "
+                       "or to check whether a source is already saved before searching the web.",
+            "input_schema": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        },
+    },
+    
 }
 
 def run_tool(name: str, args: dict) -> str:
