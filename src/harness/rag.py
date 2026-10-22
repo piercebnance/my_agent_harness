@@ -4,7 +4,7 @@ import chromadb
 import re
 from rank_bm25 import BM25Okapi
 from collections import Counter
-from pypdf import PdfReader
+from pypdf import PdfReader #THE PDF READER IS KIND OF BROKEN DOUBLE CHECK THE AGENT PROMPT TO CHECK THE ISSUE
 
 client = chromadb.PersistentClient(path=".rag_store")   # add to .gitignore
 col = client.get_or_create_collection("docs", metadata={"hnsw:space": "cosine"})
