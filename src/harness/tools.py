@@ -9,6 +9,7 @@ from bs4 import BeautifulSoup
 from ddgs import DDGS
 from . import rag
 from .rag import search_knowledge
+import traceback
 
 MAX_PAGE_CHARS = 8000
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; agent-harness/0.1)"}
@@ -113,6 +114,9 @@ def read_webpage(url: str, max_chars: int = MAX_PAGE_CHARS) -> str:
 def list_sources() -> str:
     return rag.list_sources_text()
 
+def read_source(source: str, offset: int = 0) -> str:
+    return rag.read_source_text(source, offset)
+
 TOOLS = { #planned tools: code generation, PDF scanner (for articles found online and on my machine)
     "calculator": {
         "fn": calculator,
@@ -200,6 +204,21 @@ TOOLS = { #planned tools: code generation, PDF scanner (for articles found onlin
             },
         },
     },
+    "read_source": {
+        "fn": read_source,
+        "schema": {
+            "name": "read_source",
+            "description": "Read the text of a document already in the knowledge base, in order, "
+                        "8000 characters at a time. Use to summarize or review a whole "
+                        "document. Pass the name from list_sources (a filename is enough). "
+                        "If the result says more remains, call again with the given offset.",
+            "input_schema": {
+                "type": "object",
+                "properties": {"source": {"type": "string"}, "offset": {"type": "integer", "default": 0}},
+                "required": ["source"],
+            },
+        },
+    },
     
 }
 
@@ -207,4 +226,5 @@ def run_tool(name: str, args: dict) -> str:
     try:
         return TOOLS[name]["fn"](**args)
     except Exception as e:
+        traceback.print_exc()          # full trace goes to your terminal
         return f"Error: {e}"

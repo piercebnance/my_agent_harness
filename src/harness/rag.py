@@ -4,7 +4,7 @@ import chromadb
 import re
 from rank_bm25 import BM25Okapi
 from collections import Counter
-from pypdf import PdfReader #THE PDF READER IS KIND OF BROKEN DOUBLE CHECK THE AGENT PROMPT TO CHECK THE ISSUE
+from pypdf import PdfReader 
 
 client = chromadb.PersistentClient(path=".rag_store")   # add to .gitignore
 col = client.get_or_create_collection("docs", metadata={"hnsw:space": "cosine"})
@@ -112,6 +112,15 @@ def ingest_path(path: str) -> dict:
         result["files"] += 1
     return result
 
+CHUNK_SIZE = 800
+CHUNK_OVERLAP = 150
+
+def chunk_text(text: str, size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> list[str]:
+    chunks, start = [], 0
+    while start < len(text):
+        chunks.append(text[start:start + size])
+        start += size - overlap
+    return chunks
 
 def list_sources() -> list[tuple[str, int]]:
     """Return (source, chunk_count) pairs, sorted by source."""
@@ -126,6 +135,45 @@ def list_sources_text() -> str:
         return "The knowledge base is empty."
     lines = [f"- {src} ({n} chunks)" for src, n in sources]
     return f"{len(sources)} sources in the knowledge base:\n" + "\n".join(lines)
+
+def resolve_source(name: str) -> tuple[str | None, list[str]]:
+    """Match an exact source, or a unique case-insensitive substring (e.g. just the filename)."""
+    sources = [s for s, _ in list_sources()]
+    if name in sources:
+        return name, []
+    matches = [s for s in sources if name.lower() in s.lower()]
+    if len(matches) == 1:
+        return matches[0], []
+    return None, matches
+
+
+def get_document_text(source: str) -> str:
+    """Rebuild a document from its stored chunks, removing the overlap."""
+    data = col.get(where={"source": source}, include=["documents", "metadatas"])
+    pairs = sorted(zip(data["metadatas"], data["documents"]), key=lambda p: p[0]["chunk"])
+    if not pairs:
+        return ""
+    return pairs[0][1] + "".join(doc[CHUNK_OVERLAP:] for _, doc in pairs[1:])
+
+
+def read_source_text(name: str, offset: int = 0, max_chars: int = 8000) -> str:
+    source, matches = resolve_source(name)
+    if source is None:
+        if matches:
+            return "Ambiguous name. Matches:\n" + "\n".join(f"- {m}" for m in matches)
+        return f"No source matching '{name}'. Call list_sources to see exact names."
+
+    text = get_document_text(source)
+    end = offset + max_chars
+    page = text[offset:end]
+    if not page:
+        return f"End of document ({len(text)} characters total)."
+    if end < len(text):
+        footer = (f"[Showing characters {offset}-{end} of {len(text)}. "
+                  f"Call read_source again with offset={end} for more.]")
+    else:
+        footer = f"[Showing characters {offset}-{len(text)} of {len(text)}. End of document.]"
+    return f"Source: {source}\n\n{page}\n\n{footer}"
 
 
 def forget(source: str) -> None:
