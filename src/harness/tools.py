@@ -7,8 +7,8 @@ from urllib.parse import urlparse
 import requests
 from bs4 import BeautifulSoup
 from ddgs import DDGS
+from ddgs.exceptions import DDGSException
 from . import rag
-from .rag import search_knowledge
 import traceback
 
 MAX_PAGE_CHARS = 8000
@@ -26,7 +26,10 @@ def clock (expression: str = "") -> str:
 
 def web_search(query: str, max_results: int = 5) -> str:
     """Return titles, URLs, and snippets for a search query."""
-    results = DDGS().text(query, max_results=max_results)
+    try:
+        results = DDGS().text(query, max_results=max_results)
+    except DDGSException as e:
+        return f"Error: Web search failed: {e}. Check your connection or try a different query."
     if not results:
         return "No results found."
     return "\n\n".join(
@@ -72,8 +75,7 @@ def read_webpage(url: str, max_chars: int = MAX_PAGE_CHARS) -> str:
     )
 
 def search_knowledge(query: str, k: int = 5) -> str:
-    from harness.rag import search_knowledge as rag_search_knowledge
-    return rag_search_knowledge(query, k=k)
+    return rag.search_knowledge(query, k=k)
 
 def _fetch_clean(url: str) -> tuple[str, str]:
     """Fetch a page and return (title, full cleaned text)."""

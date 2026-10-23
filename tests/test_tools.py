@@ -27,3 +27,20 @@ def test_calculator_rejects_bad_input():
 
 def test_unknown_tool_returns_error():
     assert "Error" in run_tool("nope", {})
+
+def test_search_knowledge_uses_package_relative_rag(monkeypatch):
+    monkeypatch.setattr(tools.rag, "search_knowledge", lambda query, k: f"{query}:{k}")
+    assert run_tool("search_knowledge", {"query": "test", "k": 3}) == "test:3"
+
+def test_web_search_reports_ddgs_failure_without_traceback(monkeypatch, capsys):
+    from ddgs.exceptions import DDGSException
+
+    class FailingDDGS:
+        def text(self, query, max_results):
+            raise DDGSException("No results found.")
+
+    monkeypatch.setattr(tools, "DDGS", FailingDDGS)
+    result = run_tool("web_search", {"query": "test"})
+
+    assert "Web search failed: No results found." in result
+    assert capsys.readouterr().err == ""
